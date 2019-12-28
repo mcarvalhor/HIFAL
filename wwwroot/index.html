@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width,height=device-height,initial-scale=1">
+		<meta name="robots" content="noindex,nofollow,noarchive,noimageindex">
+		<title>Welcome to HIFAL</title>
+		<style type="text/css">
+			body {
+				background-color: #000000;
+				background-size: cover;
+				background-position: center;
+				background-repeat: no-repeat;
+				background-attachment: fixed;
+			}
+			section {
+				display: block;
+				max-width: 600px;
+				background-color: #ffffff;
+				box-shadow: 0px 0px 10px 10px #ffffff;
+				border-radius: 10px;
+				padding: 20px;
+				margin: 30px auto;
+			}
+			article {
+				text-align: justify;
+			}
+			a {
+				color:#000000;
+			}
+		</style>
+		<script src="/js/index.js" type="text/javascript"></script>
+	</head>
+
+	<body>
+		<section>
+			<header>
+				<h1>Welcome to HIFAL!</h1>
+			</header>
+			<article>
+				<p>HIFAL is running now. Please, upload a website or resources in the web root folder. By default, this is the "wwwroot" folder.</p>
+				<p>Please, be aware of the following remarks:</p>
+				<p>
+					<ul>
+						<li>HIFAL doesn't support HTTPS (HTTP over TLS/SSL) yet.</li>
+						<li>HIFAL doesn't serve dynamic content. HIFAL only serves static files. By that, a *.php or *.py file will never be interpreted or executed, but instead downloaded by user's browser.</li>
+						<li>There's no hidden files or folders in HIFAL. Everything under web root folder is visible and available to the web.</li>
+						<li>Folder listing (or directory listing) is enabled in HIFAL. When a user accesses a folder path, first HIFAL tries to find a "index.html" file in this folder. If none is found, then its subfolders and files are listed.</li>
+						<li>HIFAL is not multithreaded, which means it can't serve multiple users connecting at the website at once. Instead, it serves only a single user at a time. If this user is downloading a large file, for example, then the whole website is offline to other users until the download is completed.</li>
+					</ul>
+				</p>
+			</article>
+			<footer>
+				<p><a href="http://github.com/mcarvalhor/HIFAL" target="_blank">GitHub</a></p>
+			</footer>
+		</section>
+	</body>
+
+</html>
