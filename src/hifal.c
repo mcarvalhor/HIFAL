@@ -208,6 +208,10 @@ int _HIFAL_OutputFile(CONNECTION_T *c, HIFAL_T *s) {
 	send(c->fd, "HTTP/1.0 200 OK\r\n", 17, 0);
 	if(_HIFAL_FileExtensionIs(c->resource, ".html") || _HIFAL_FileExtensionIs(c->resource, ".htm")) {
 		send(c->fd, "Content-Type: text/html; charset=utf-8\r\n", 40, 0);
+	} else if(_HIFAL_FileExtensionIs(c->resource, ".js")) {
+		send(c->fd, "Content-Type: text/javascript; charset=utf-8\r\n", 46, 0);
+	} else if(_HIFAL_FileExtensionIs(c->resource, ".css")) {
+		send(c->fd, "Content-Type: text/css; charset=utf-8\r\n", 39, 0);
 	} else if(_HIFAL_FileExtensionIs(c->resource, ".txt") || _HIFAL_FileExtensionIs(c->resource, ".md")) {
 		send(c->fd, "Content-Type: text/plain; charset=utf-8\r\n", 41, 0);
 	} else if(_HIFAL_FileExtensionIs(c->resource, ".jpg") || _HIFAL_FileExtensionIs(c->resource, ".jpeg")) {
