@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <dirent.h>
 #include <stdio.h>
+#include <ctype.h>
 
 #include <hifal.h>
 
@@ -12,6 +13,10 @@ enum {
 	ARG_PORT,
 	ARG_CACHE
 };
+
+int isStrNumber(char *str);
+
+
 
 int main(int argc, char **argv) {
 	size_t cacheMemSize;
@@ -37,8 +42,17 @@ int main(int argc, char **argv) {
 	}
 	closedir(root);
 
-	port = atoi(argv[ARG_PORT]);
-	printf("Starting server at '%s:%d'...\n", "localhost", port);
+	if(isStrNumber(argv[ARG_PORT]) == 0 || (port = atoi(argv[ARG_PORT])) < 0 || port > 65535) {
+		fprintf(stderr, "Could not start server.\n");
+		fprintf(stderr, "The port '%s' is not valid. Please use a numeric value (%d-%d).\n", argv[ARG_ROOTPATH], 0, 65535);
+		return EXIT_FAILURE;
+	}
+
+	if(port == 0) {
+		printf("Starting server at '%s:%s'...\n", "localhost", "*");
+	} else {
+		printf("Starting server at '%s:%d'...\n", "localhost", port);
+	}
 	if(argc == ARG_CACHE + 1) {
 		cacheMemSize = atol(argv[ARG_CACHE]);
 		server = HIFAL_CacheNew(argv[ARG_ROOTPATH], port, cacheMemSize);
@@ -57,3 +71,15 @@ int main(int argc, char **argv) {
 	HIFAL_Destroy(server);
 	return EXIT_SUCCESS;
 }
+
+int isStrNumber(char *str) {
+	while(*str != '\0') {
+		if(isdigit(*str) == 0) {
+			return 0;
+		}
+		str++;
+	}
+	return 1;
+}
+
+
