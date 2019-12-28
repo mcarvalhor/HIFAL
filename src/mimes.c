@@ -120,7 +120,7 @@ int MIMES_AddMime(char *extension, char *name, int caseSensitive, MIMES_T *m) {
 }
 
 char *MIMES_GetMimeForFile(char *fileName, MIMES_T *m) {
-	MIMES_NODE_T *aux, *it;
+	MIMES_NODE_T *it;
 	size_t i, len;
 	char *key;
 	if(fileName == NULL || m == NULL) {
@@ -141,12 +141,6 @@ char *MIMES_GetMimeForFile(char *fileName, MIMES_T *m) {
 	/* Check if extension is not empty or longer than maximum allowed. */
 	key++;
 	if((len = strlen(key)) < 1 || len > MIMES_EXTENSION_LENGTH) {
-		return NULL;
-	}
-
-	/* Try to alloc structure. */
-	aux = (MIMES_NODE_T *) malloc(sizeof(MIMES_NODE_T));
-	if(aux == NULL) {
 		return NULL;
 	}
 
