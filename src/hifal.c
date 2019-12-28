@@ -52,9 +52,11 @@ HIFAL_T *HIFAL_CacheNew(char *root, int port, size_t cache) {
 
 	/* Try to alloc structure and buffers. */
 	aux = (HIFAL_T *) malloc(sizeof(HIFAL_T));
+	if(aux == NULL) {
+		return NULL;
+	}
 	aux->transmissionBuffer = (char *) malloc(sizeof(char) * HIFAL_BUFFER_LENGTH);
-	if(aux == NULL || aux->transmissionBuffer == NULL) {
-		free(aux->transmissionBuffer);
+	if(aux->transmissionBuffer == NULL) {
 		free(aux);
 		return NULL;
 	}
