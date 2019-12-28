@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <signal.h>
 
+#include <mimes.h>
 #include "hifal.h"
 
 #include <unistd.h>
@@ -25,11 +26,12 @@
 
 
 typedef struct __hifal_t {
-	int socketFd; /* Server Socket File Descriptor. */
+	char *root, *transmissionBuffer, *pathBuffer; /* Server web root and pre-allocated buffers. */
 	struct sockaddr_in6 socketAddr; /* Server Address. */
 	struct timeval socketIOTimeout; /* Socket IO Timeout. */
-	char *root, *transmissionBuffer, *pathBuffer; /* Server web root and pre-allocated buffers. */
+	MIMES_T *mimesTable; /* Mime Types reference table. */
 	size_t cacheSize; /* Cache size in bytes. */
+	int socketFd; /* Server Socket File Descriptor. */
 } HIFAL_T;
 
 typedef struct __hifal_connection_t {
@@ -124,7 +126,7 @@ HIFAL_T *HIFAL_CacheNew(char *root, int port, size_t cache) {
 	/* Set server options. */
 	auxOn = 1;
 	if(setsockopt(aux->socketFd, SOL_SOCKET, SO_REUSEADDR, (const char *) &auxOn, sizeof(auxOn)) < 0) {
-		shutdown(aux->socketFd, SHUT_RDWR);
+		close(aux->socketFd);
 		free(aux->transmissionBuffer);
 		free(aux->pathBuffer);
 		free(aux->root);
@@ -134,7 +136,7 @@ HIFAL_T *HIFAL_CacheNew(char *root, int port, size_t cache) {
 	aux->socketIOTimeout.tv_sec = HIFAL_IO_TIMEOUT;
 	aux->socketIOTimeout.tv_usec = 0;
 	if(setsockopt(aux->socketFd, SOL_SOCKET, SO_RCVTIMEO, (const char *) &aux->socketIOTimeout, sizeof(aux->socketIOTimeout)) < 0) {
-		shutdown(aux->socketFd, SHUT_RDWR);
+		close(aux->socketFd);
 		free(aux->transmissionBuffer);
 		free(aux->pathBuffer);
 		free(aux->root);
@@ -142,7 +144,7 @@ HIFAL_T *HIFAL_CacheNew(char *root, int port, size_t cache) {
 		return NULL;
 	}
 	if(setsockopt(aux->socketFd, SOL_SOCKET, SO_SNDTIMEO, (const char *) &aux->socketIOTimeout, sizeof(aux->socketIOTimeout)) < 0) {
-		shutdown(aux->socketFd, SHUT_RDWR);
+		close(aux->socketFd);
 		free(aux->transmissionBuffer);
 		free(aux->pathBuffer);
 		free(aux->root);
@@ -156,13 +158,25 @@ HIFAL_T *HIFAL_CacheNew(char *root, int port, size_t cache) {
 	aux->socketAddr.sin6_port = htons(port); /* Run at provided port. */
 	aux->socketAddr.sin6_addr = in6addr_any; /* Accepts IPv4 and IPv6. */
 	if(bind(aux->socketFd, (const struct sockaddr *) &aux->socketAddr, sizeof(struct sockaddr_in6)) < 0) {
-		shutdown(aux->socketFd, SHUT_RDWR);
+		close(aux->socketFd);
 		free(aux->transmissionBuffer);
 		free(aux->pathBuffer);
 		free(aux->root);
 		free(aux);
 		return NULL;
 	}
+
+	/* Try to allocate Mime Types table. */
+	aux->mimesTable = MIMES_New();
+	if(aux->mimesTable == NULL) {
+		close(aux->socketFd);
+		free(aux->transmissionBuffer);
+		free(aux->pathBuffer);
+		free(aux->root);
+		free(aux);
+		return NULL;
+	}
+	MIMES_AddCommon(aux->mimesTable);
 
 	return aux;
 }
@@ -171,25 +185,9 @@ HIFAL_T *HIFAL_New(char *root, int port) {
 	return HIFAL_CacheNew(root, port, HIFAL_CACHE_DEFAULT_SIZE);
 }
 
-int _HIFAL_FileExtensionIs(char *fileName, char *extension) {
-	size_t fLen, eLen;
-	fLen = strlen(fileName);
-	eLen = strlen(extension);
-	if(fLen < eLen) {
-		return 0;
-	}
-	fileName = &fileName[fLen - eLen];
-	while(*fileName != '\0' && *extension != '\0') {
-		if(tolower(*fileName) != tolower(*extension)) {
-			return 0;
-		}
-		*fileName++, *extension++;
-	}
-	return 1;
-}
-
 int _HIFAL_OutputFile(CONNECTION_T *c, HIFAL_T *s) {
 	ssize_t i, j, fileLength;
+	char *mimeType;
 	FILE *fileStream;
 	if((fileStream = fopen(c->resource, "rb")) == NULL) {
 		return 1;
@@ -207,34 +205,18 @@ int _HIFAL_OutputFile(CONNECTION_T *c, HIFAL_T *s) {
 		fclose(fileStream);
 		return 2;
 	}
-	send(c->fd, "HTTP/1.0 200 OK\r\n", 17, 0);
-	if(_HIFAL_FileExtensionIs(c->resource, ".html") || _HIFAL_FileExtensionIs(c->resource, ".htm")) {
-		send(c->fd, "Content-Type: text/html; charset=utf-8\r\n", 40, 0);
-	} else if(_HIFAL_FileExtensionIs(c->resource, ".js")) {
-		send(c->fd, "Content-Type: text/javascript; charset=utf-8\r\n", 46, 0);
-	} else if(_HIFAL_FileExtensionIs(c->resource, ".css")) {
-		send(c->fd, "Content-Type: text/css; charset=utf-8\r\n", 39, 0);
-	} else if(_HIFAL_FileExtensionIs(c->resource, ".txt") || _HIFAL_FileExtensionIs(c->resource, ".md")) {
-		send(c->fd, "Content-Type: text/plain; charset=utf-8\r\n", 41, 0);
-	} else if(_HIFAL_FileExtensionIs(c->resource, ".jpg") || _HIFAL_FileExtensionIs(c->resource, ".jpeg")) {
-		send(c->fd, "Content-Type: image/jpeg\r\n", 26, 0);
-	} else if(_HIFAL_FileExtensionIs(c->resource, ".png")) {
-		send(c->fd, "Content-Type: image/png\r\n", 25, 0);
-	} else if(_HIFAL_FileExtensionIs(c->resource, ".gif")) {
-		send(c->fd, "Content-Type: image/gif\r\n", 25, 0);
-	} else if(_HIFAL_FileExtensionIs(c->resource, ".mp4")) {
-		send(c->fd, "Content-Type: video/mp4\r\n", 25, 0);
-	} else if(_HIFAL_FileExtensionIs(c->resource, ".ogg") || _HIFAL_FileExtensionIs(c->resource, ".ogv") || _HIFAL_FileExtensionIs(c->resource, ".ogx")) {
-		send(c->fd, "Content-Type: video/ogg\r\n", 25, 0);
-	} else if(_HIFAL_FileExtensionIs(c->resource, ".webm")) {
-		send(c->fd, "Content-Type: video/webm\r\n", 26, 0);
-	} else if(_HIFAL_FileExtensionIs(c->resource, ".pdf")) {
-		send(c->fd, "Content-Type: application/pdf\r\n", 31, 0);
+	send(c->fd, "HTTP/1.0 200 OK\r\nContent-Type: ", 31, 0);
+	mimeType = MIMES_GetMimeForFile(c->resource, s->mimesTable);
+	if(mimeType == NULL) {
+		send(c->fd, "application/octet-stream", 24, 0);
+	} else if(strncmp(mimeType, "text/", 5) == 0) {
+		send(c->fd, mimeType, strlen(mimeType), 0);
+		send(c->fd, "; charset=utf-8", 15, 0);
 	} else {
-		send(c->fd, "Content-Type: application/octet-stream\r\n", 40, 0);
+		send(c->fd, mimeType, strlen(mimeType), 0);
 	}
 	char fileLengthStr[256];
-	sprintf(fileLengthStr, "Content-Length: %ld\r\n\r\n", fileLength);
+	sprintf(fileLengthStr, "\r\nContent-Length: %ld\r\n\r\n", fileLength);
 	send(c->fd, fileLengthStr, strlen(fileLengthStr), 0);
 	for(i = 0; i < fileLength; i += HIFAL_BUFFER_LENGTH * sizeof(char)) {
 		j = fread(s->transmissionBuffer, sizeof(char), HIFAL_BUFFER_LENGTH, fileStream);
@@ -435,7 +417,8 @@ void HIFAL_Destroy(HIFAL_T *s) {
 	if(s == NULL) {
 		return;
 	}
-	shutdown(s->socketFd, SHUT_RDWR);
+	close(s->socketFd);
+	MIMES_Destroy(s->mimesTable);
 	free(s->transmissionBuffer);
 	free(s->pathBuffer);
 	free(s->root);
