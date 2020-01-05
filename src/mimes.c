@@ -85,7 +85,7 @@ int MIMES_AddMime(char *extension, char *name, int caseSensitive, MIMES_T *m) {
 	}
 
 	/* Check if strings are not empty or larger than limits. */
-	if((len = strlen(extension)) > MIMES_EXTENSION_LENGTH || *extension == '\0' || strlen(name) > MIMES_NAME_LENGTH || *name == '\0') {
+	if(strlen(extension) > MIMES_EXTENSION_LENGTH || *extension == '\0' || strlen(name) > MIMES_NAME_LENGTH || *name == '\0') {
 		return 0;
 	}
 
@@ -99,6 +99,12 @@ int MIMES_AddMime(char *extension, char *name, int caseSensitive, MIMES_T *m) {
 	aux->caseSensitive = (caseSensitive == 0) ? 1:0;
 	strcpy(aux->extension, extension);
 	strcpy(aux->name, name);
+
+	/* Make name lowercase. */
+	len = strlen(aux->name);
+	for(i = 0; i < len; i++) {
+		aux->name[i] = tolower(aux->name[i]);
+	}
 
 	/* Get hashtable position for this extension. */
 	i = _MIMES_HashKey(extension) % m->hashLength;
