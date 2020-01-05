@@ -410,7 +410,9 @@ int HIFAL_Serve(int *stop, HIFAL_T *s) {
 }
 
 int HIFAL_ServeForever(HIFAL_T *s) {
-	return HIFAL_Serve(NULL, s);
+	int stop;
+	stop = 0;
+	return HIFAL_Serve(&stop, s);
 }
 
 void HIFAL_Destroy(HIFAL_T *s) {
