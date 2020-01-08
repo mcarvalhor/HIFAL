@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <signal.h>
 
+#include <socketBuffer.h>
 #include <mimes.h>
 #include "hifal.h"
 
@@ -35,9 +36,12 @@ typedef struct __hifal_t {
 } HIFAL_T;
 
 typedef struct __hifal_connection_t {
-	char *resource; /* Resource path in file system. */
+	struct sockaddr_in6 clientAddr; /* Client Address. */
+	socklen_t clientAddrLength; /* Client Address Length. */
+	SBUFFER_T *buffer; /* Connection read/write buffer. */
 	char *requestURI; /* Request URI provided by client. */
-	int fd; /* Connection File Descriptor. */
+	char *resource; /* Resource path in file system. */
+	/*int fd; /* Connection File Descriptor. */
 } CONNECTION_T;
 
 
@@ -205,26 +209,27 @@ int _HIFAL_OutputFile(CONNECTION_T *c, HIFAL_T *s) {
 		fclose(fileStream);
 		return 2;
 	}
-	send(c->fd, "HTTP/1.0 200 OK\r\nContent-Type: ", 31, 0);
+	SB_SendString("HTTP/1.0 200 OK\r\nContent-Type: ", c->buffer);
 	mimeType = MIMES_GetMimeForFile(c->resource, s->mimesTable);
 	if(mimeType == NULL) {
-		send(c->fd, "application/octet-stream", 24, 0);
+		SB_SendString("application/octet-stream", c->buffer);
 	} else if(strncmp(mimeType, "text/", 5) == 0) {
-		send(c->fd, mimeType, strlen(mimeType), 0);
-		send(c->fd, "; charset=utf-8", 15, 0);
+		SB_SendString(mimeType, c->buffer);
+		SB_SendString("; charset=utf-8", c->buffer);
 	} else {
-		send(c->fd, mimeType, strlen(mimeType), 0);
+		SB_SendString(mimeType, c->buffer);
 	}
-	char fileLengthStr[256];
-	sprintf(fileLengthStr, "\r\nContent-Length: %ld\r\n\r\n", fileLength);
-	send(c->fd, fileLengthStr, strlen(fileLengthStr), 0);
+	SB_SendString("\r\nContent-Length: ", c->buffer);
+	SB_SendNumberAsString(fileLength, c->buffer);
+	SB_SendString("\r\n\r\n", c->buffer);
+	SB_FlushOutput(c->buffer); /* Flushes output to guarantee best performance. */
 	for(i = 0; i < fileLength; i += HIFAL_BUFFER_LENGTH * sizeof(char)) {
 		j = fread(s->transmissionBuffer, sizeof(char), HIFAL_BUFFER_LENGTH, fileStream);
 		if(j <= 0) {
 			fclose(fileStream);
 			return 0;
 		}
-		send(c->fd, s->transmissionBuffer, j * sizeof(char), 0);
+		SB_Send(s->transmissionBuffer, j * sizeof(char), c->buffer);
 	}
 	fclose(fileStream);
 	return 0;
@@ -239,10 +244,10 @@ int _HIFAL_OutputFolder(CONNECTION_T *c, HIFAL_T *s) {
 		return 1;
 	}
 	if(c->requestURI[strlen(c->requestURI) - 1] != '/') {
-		send(c->fd, HIFAL_FOLDERREDIR_MSGSTART, strlen(HIFAL_FOLDERREDIR_MSGSTART), 0);
+		SB_SendString(HIFAL_FOLDERREDIR_MSGSTART, c->buffer);
 		/* TODO: &c->resource[strlen(s->root) - 1] must be copied to another variable and must be urlencoded. */
-		send(c->fd, &c->resource[strlen(s->root) - 1], strlen(&c->resource[strlen(s->root) - 1]), 0);
-		send(c->fd, HIFAL_FOLDERREDIR_MSGEND, strlen(HIFAL_FOLDERREDIR_MSGEND), 0);
+		SB_SendString(&c->resource[strlen(s->root) - 1], c->buffer);
+		SB_SendString(HIFAL_FOLDERREDIR_MSGEND, c->buffer);
 		closedir(folderStream);
 		return 0;
 	}
@@ -261,101 +266,94 @@ int _HIFAL_OutputFolder(CONNECTION_T *c, HIFAL_T *s) {
 		}
 		c->resource[tmpStrLen] = '\0';
 	}
-	send(c->fd, HIFAL_FOLDERLIST_MSGSTART, strlen(HIFAL_FOLDERLIST_MSGSTART), 0);
+	SB_SendString(HIFAL_FOLDERLIST_MSGSTART, c->buffer);
 	while((folderItem = readdir(folderStream)) != NULL) {
-		send(c->fd, "<li><a href=\"", 13, 0);
-		send(c->fd, folderItem->d_name, strlen(folderItem->d_name), 0);
-		send(c->fd, "\">", 2, 0);
-		send(c->fd, folderItem->d_name, strlen(folderItem->d_name), 0);
+		SB_SendString("<li><a href=\"", c->buffer);
+		SB_SendString(folderItem->d_name, c->buffer);
+		SB_SendString("\">", c->buffer);
+		SB_SendString(folderItem->d_name, c->buffer);
 		#ifdef DT_DIR /* Some compilers or systems don't support this. */
 		if(folderItem->d_type == DT_DIR) {
-			send(c->fd, "/", 1, 0);
+			SB_SendString("/", c->buffer);
 		}
 		#endif
-		send(c->fd, "</a></li>", 9, 0);
+		SB_SendString("</a></li>", c->buffer);
 	}
-	send(c->fd, HIFAL_FOLDERLIST_MSGEND, strlen(HIFAL_FOLDERLIST_MSGEND), 0);
+	SB_SendString(HIFAL_FOLDERLIST_MSGEND, c->buffer);
 	closedir(folderStream);
 	return 0;
 }
 
-void _HIFAL_OutputResource(char *requestURI, int connFd, HIFAL_T *s) {
+void _HIFAL_OutputResource(CONNECTION_T *conn, HIFAL_T *s) {
 	char *resourceBuffer;
-	CONNECTION_T conn;
-
 	resourceBuffer = s->pathBuffer;
-	conn.requestURI = requestURI;
-	conn.fd = connFd;
 
-	/* TODO: conn.requestURI must be urldecoded. */
+	/* TODO: conn->requestURI must be urldecoded. */
 
 	/* Appends Request URI to Web Root folder. */
 	strcpy(resourceBuffer, s->root);
-	if(requestURI[0] == '/') {
-		strcat(resourceBuffer, &requestURI[1]);
+	if(conn->requestURI[0] == '/') {
+		strcat(resourceBuffer, &conn->requestURI[1]);
 	} else {
-		strcat(resourceBuffer, requestURI);
+		strcat(resourceBuffer, conn->requestURI);
 	}
 
 	/* Checks if resource realpath is subdirectory or file inside web root folder. */
-	conn.resource = realpath(resourceBuffer, NULL);
-	if(conn.resource == NULL) { /* Resource doesn't exist OR there isn't enough memory to create its realpath. Either way, output a 404 error. */
-		send(conn.fd, HIFAL_NOTFOUND_MSG, strlen(HIFAL_NOTFOUND_MSG), 0);
+	conn->resource = realpath(resourceBuffer, NULL);
+	if(conn->resource == NULL) { /* Resource doesn't exist OR there isn't enough memory to create its realpath. Either way, output a 404 error. */
+		SB_SendString(HIFAL_NOTFOUND_MSG, conn->buffer);
 		return;
 	}
-	if(strncmp(s->root, conn.resource, strlen(s->root)) != 0 && (strncmp(s->root, conn.resource, strlen(conn.resource)) != 0 || strlen(conn.resource) != strlen(s->root) - 1)) { /* Resource is located outside web root folder. */
-		send(conn.fd, HIFAL_NOTFOUND_MSG, strlen(HIFAL_NOTFOUND_MSG), 0);
-		free(conn.resource);
-		return;
-	}
-
-	if(_HIFAL_OutputFolder(&conn, s) == 0) {
-		free(conn.resource);
+	if(strncmp(s->root, conn->resource, strlen(s->root)) != 0 && (strncmp(s->root, conn->resource, strlen(conn->resource)) != 0 || strlen(conn->resource) != strlen(s->root) - 1)) { /* Resource is located outside web root folder. */
+		SB_SendString(HIFAL_NOTFOUND_MSG, conn->buffer);
+		free(conn->resource);
 		return;
 	}
 
-	if(_HIFAL_OutputFile(&conn, s) == 0) {
-		free(conn.resource);
+	if(_HIFAL_OutputFolder(conn, s) == 0) {
+		free(conn->resource);
+		return;
+	}
+
+	if(_HIFAL_OutputFile(conn, s) == 0) {
+		free(conn->resource);
 		return;
 	}
 
 	/* Fallback: not a file and not a folder. Output a 404 error. */
-	send(connFd, HIFAL_NOTFOUND_MSG, strlen(HIFAL_NOTFOUND_MSG), 0);
-	free(conn.resource);
+	SB_SendString(HIFAL_NOTFOUND_MSG, conn->buffer);
+	free(conn->resource);
 	return;
 }
 
-int HIFAL_ProcessConnection(int connFd, HIFAL_T *s) {
+int HIFAL_ProcessConnection(CONNECTION_T *conn, HIFAL_T *s) {
 	ssize_t i, j, len;
 	char *buffer;
-	if(connFd < 0 || s == NULL) {
+	if(conn == NULL || s == NULL) {
 		return 0;
 	}
 
 	buffer = s->transmissionBuffer; /* Transmission buffer is already pre-allocated. */
-	if((len = read(connFd, buffer, HIFAL_BUFFER_LENGTH)) < 0) {
-		return 0;
-	}
-
-	/* First line of transmission parsing. */
-	for(i = 0; isspace(buffer[i]) != 0 && i < len; i++); /* Skips 0...* spacing at start of the transmission. */
-	for(j = i; j < len && buffer[j] != '\n'; j++); /* Checks for first line break ('\n'). */
-	if(j >= len) { /* Line break not found... */
-		if(len == HIFAL_BUFFER_LENGTH) { /* because maybe the resource URI is too long and didn't fit in the buffer size. */
-			send(connFd, HIFAL_URITOOLONG_MSG, strlen(HIFAL_URITOOLONG_MSG), 0);
-		} else { /* because the request is not valid. */
-			send(connFd, HIFAL_BADREQUEST_MSG, strlen(HIFAL_BADREQUEST_MSG), 0);
-		}
+	if((j = SB_ReceiveLine(buffer, HIFAL_BUFFER_LENGTH + 1, "\n", conn->buffer)) < 0) { /* Unexpected end of stream. */
+		SB_SendString(HIFAL_BADREQUEST_MSG, conn->buffer);
 		return 1;
 	}
-	for(; j >= i && isspace(buffer[j]) != 0; j--); /* Skips 0...* spacing at end of the first line of the transmission. */
+	if(j > 0) { /* Full line didn't fit in buffer. */
+		SB_SendString(HIFAL_URITOOLONG_MSG, conn->buffer);
+		return 1;
+	}
+	len = strlen(buffer);
+
+	/* First line of transmission parsing. */
+	for(i = 0; i < len && isspace(buffer[i]) != 0; i++); /* Skips 0...* spacing at start of the transmission. */
+	for(j = len - 1; j >= i && isspace(buffer[j]) != 0; j--); /* Skips 0...* spacing at end of the first line of the transmission. */
 	buffer[j] = '\0';
 	len = strlen(&buffer[i]);
 	memmove(buffer, &buffer[i], sizeof(char) * (len + 1));
 
 	/* Only GET method is supported. */
 	if(strncmp("GET ", buffer, 4) != 0) {
-		send(connFd, HIFAL_METHODNOTALLOWED_MSG, strlen(HIFAL_METHODNOTALLOWED_MSG), 0);
+		SB_SendString(HIFAL_METHODNOTALLOWED_MSG, conn->buffer);
 		return 1;
 	}
 
@@ -365,18 +363,20 @@ int HIFAL_ProcessConnection(int connFd, HIFAL_T *s) {
 	for(j = i; j < len && buffer[j] != '?' && buffer[j] != '#' && isspace(buffer[j]) == 0; j++); /* Finds end of resource URI (end of line, spacing, start of query, or start of fragment). */
 	buffer[j] = '\0';
 	len = strlen(&buffer[i]);
-	if(len > HIFAL_PATH_MAXLEN) { /* Checks length of resource URI. */
-		send(connFd, HIFAL_URITOOLONG_MSG, strlen(HIFAL_URITOOLONG_MSG), 0);
+	if(len > HIFAL_PATH_MAXLEN) { /* Checks length of request URI. */
+		SB_SendString(HIFAL_URITOOLONG_MSG, conn->buffer);
 		return 1;
 	}
 
 	/* Output HTTP Response. */
-	_HIFAL_OutputResource(&buffer[i], connFd, s);
+	conn->requestURI = &buffer[i];
+	_HIFAL_OutputResource(conn, s);
 	return 1;
 }
 
 int HIFAL_Serve(int *stop, HIFAL_T *s) {
 	int auxForever, connFd;
+	CONNECTION_T conn;
 	if(s == NULL) {
 		return 0;
 	}
@@ -400,10 +400,29 @@ int HIFAL_Serve(int *stop, HIFAL_T *s) {
 			continue;
 		}
 
-		/* Process HTTP Request and send HTTP Response. */
-		HIFAL_ProcessConnection(connFd, s);
+		/* Get client address. */
+		conn.clientAddrLength = sizeof(conn.clientAddr);
+		getpeername(connFd, (struct sockaddr *) &conn.clientAddr, (socklen_t *) &conn.clientAddrLength);
 
-		close(connFd);
+		/* Try to allocate read/write buffer. */
+		conn.buffer = SB_New(connFd, SBUFFER_OPTIONS_IO, HIFAL_BUFFER_LENGTH);
+		if(conn.buffer == NULL) {
+			close(connFd);
+			continue;
+		}
+
+		/*char str[INET6_ADDRSTRLEN];
+		if(inet_ntop(AF_INET6, &conn.clientAddr.sin6_addr, str, sizeof(str))) {
+			printf("Client connected, using address '%s' and port '%d'.\n", str, ntohs(conn.clientAddr.sin6_port));
+		}*/
+
+		/* Process HTTP Request and send HTTP Response. */
+		HIFAL_ProcessConnection(&conn, s);
+
+		if(SB_Close(conn.buffer) != 0) {
+			SB_Destroy(conn.buffer);
+			close(connFd);
+		}
 	}
 
 	return 1;
