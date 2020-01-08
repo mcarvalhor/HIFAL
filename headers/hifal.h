@@ -30,7 +30,7 @@
 
 	/* Folder: redirect to append "/" at end of resource URI. */
 	#define HIFAL_FOLDERREDIR_MSGSTART "HTTP/1.0 302 Found\r\nLocation:"
-	#define HIFAL_FOLDERREDIR_MSGEND "/\r\n\r\n"
+	#define HIFAL_FOLDERREDIR_MSGEND "\r\n\r\n"
 
 	/* Not allowed method message. */
 	#define HIFAL_METHODNOTALLOWED_MSG "HTTP/1.0 405 Method Not Allowed\r\nAllow: GET\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: 23\r\n\r\n405 Method Not Allowed."

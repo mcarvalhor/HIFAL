@@ -6,6 +6,7 @@
 
 #include <socketBuffer.h>
 #include <mimes.h>
+#include <web.h>
 #include "hifal.h"
 
 #include <unistd.h>
@@ -245,14 +246,14 @@ int _HIFAL_OutputFolder(CONNECTION_T *c, HIFAL_T *s) {
 	}
 	if(c->requestURI[strlen(c->requestURI) - 1] != '/') {
 		SB_SendString(HIFAL_FOLDERREDIR_MSGSTART, c->buffer);
-		/* TODO: &c->resource[strlen(s->root) - 1] must be copied to another variable and must be urlencoded. */
-		SB_SendString(&c->resource[strlen(s->root) - 1], c->buffer);
+		SB_SendString(c->requestURI, c->buffer);
+		SB_SendString("/", c->buffer);
 		SB_SendString(HIFAL_FOLDERREDIR_MSGEND, c->buffer);
 		closedir(folderStream);
 		return 0;
 	}
 	/* Try to find 'index.html' in this folder. */
-	tmpStr = (char *) realloc(c->resource, sizeof(char) * (strlen(c->resource) + 12)); /* Reallocate to ensure there's memory for "/index.html". */
+	tmpStr = (char *) realloc(c->resource, sizeof(char) * (strlen(c->resource) + 12)); /* Reallocate to ensure there's memory space for "/index.html". */
 	if(tmpStr != NULL) {
 		c->resource = tmpStr;
 		tmpStrLen = strlen(c->resource);
@@ -286,17 +287,20 @@ int _HIFAL_OutputFolder(CONNECTION_T *c, HIFAL_T *s) {
 
 void _HIFAL_OutputResource(CONNECTION_T *conn, HIFAL_T *s) {
 	char *resourceBuffer;
+	size_t resourceLen;
 	resourceBuffer = s->pathBuffer;
-
-	/* TODO: conn->requestURI must be urldecoded. */
 
 	/* Appends Request URI to Web Root folder. */
 	strcpy(resourceBuffer, s->root);
+	resourceLen = strlen(resourceBuffer);
 	if(conn->requestURI[0] == '/') {
 		strcat(resourceBuffer, &conn->requestURI[1]);
 	} else {
 		strcat(resourceBuffer, conn->requestURI);
 	}
+
+	/* URL Decodes request URI in resource path. */
+	Web_UrlDecode(&resourceBuffer[resourceLen]);
 
 	/* Checks if resource realpath is subdirectory or file inside web root folder. */
 	conn->resource = realpath(resourceBuffer, NULL);
