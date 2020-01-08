@@ -44,9 +44,9 @@
 				<p>
 					<ul>
 						<li>HIFAL doesn't support HTTPS (HTTP over TLS/SSL).</li>
-						<li>HIFAL doesn't serve dynamic content. HIFAL only serves static files. By that, a *.php or *.py file will never be interpreted or executed, but instead downloaded by user's browser.</li>
-						<li>There's no hidden files or folders in HIFAL. Everything under web root folder is visible and available to the web.</li>
-						<li>Folder listing (or directory listing) is enabled in HIFAL. When a user accesses a folder path, first HIFAL tries to find a "index.html" file in this folder. If none is found, then its subfolders and files are listed.</li>
+						<li>HIFAL doesn't serve dynamic content. HIFAL only serves static files. By that, a *.php, *.py or *.exe file will never be interpreted or executed, but instead downloaded by user's browser.</li>
+						<li>Folder listing (or directory listing) is enabled in HIFAL. When a user accesses a folder path, first HIFAL tries to an "index.html" file in this folder. If none is found, then its subfolders and files are listed.</li>
+						<li>There's no hidden files or folders in HIFAL. Everything under web root folder is visible and available to the web. The only exception is folder listing (or directory listing), in which files starting with a dot (.*) are not listed, though still available.</li>
 						<li>HIFAL is not multithreaded, which means it can't serve multiple users connecting at the website at once. Instead, it serves only a single user at a time. If this user is downloading a large file, for example, then the whole website is offline to other users until the download is completed.</li>
 					</ul>
 				</p>

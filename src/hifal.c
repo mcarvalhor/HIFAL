@@ -268,7 +268,11 @@ int _HIFAL_OutputFolder(CONNECTION_T *c, HIFAL_T *s) {
 		c->resource[tmpStrLen] = '\0';
 	}
 	SB_SendString(HIFAL_FOLDERLIST_MSGSTART, c->buffer);
+	SB_SendString("<a href=\"../\" style=\"font-weight: bold;\">../</a>", c->buffer);
 	while((folderItem = readdir(folderStream)) != NULL) {
+		if(folderItem->d_name[0] == '.') { /* Do not list hidden files (starting with '.'). */
+			continue;
+		}
 		SB_SendString("<li><a href=\"", c->buffer);
 		SB_SendString(folderItem->d_name, c->buffer);
 		SB_SendString("\">", c->buffer);
