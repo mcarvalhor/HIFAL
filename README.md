@@ -11,15 +11,11 @@ You may need a very lightweight HTTP Web Server if the main purpose of the serve
 
 ## How to compile?
 
-You can compile HIFAL using make. Just execute "make all" in a terminal.
+You can compile HIFAL using cmake. Just execute "cmake ." in a terminal. After that, execute "make all" and HIFAL will be compiled.
 
 ## How to run?
 
-You can run HIFAL using a terminal. Just execute the compiled binary "./hifal".
-
-## How to link to my code?
-
-When you compile HIFAL using "make all", the object file "obj/hifal.o" will be created. You can link this object file to your program and use header file "headers/hifal.h".
+You can run HIFAL using a terminal. Just execute the compiled binary "bin/hifal".
 
 ## How to contribute?
 
