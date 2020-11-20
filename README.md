@@ -1,5 +1,5 @@
 # HIFAL
-HIFAL Is Fast And Light is a very fast and lightweight HTTP server. It focuses mainly on memory and CPU usage, and it's perfect for use when a web service isn't the main purpose of a server. You can, for instance, use it on if you need to provide a brief explanation for the end user on the server purpose on a browser.
+HIFAL Is Fast And Light (HIFAL) is a very fast and lightweight HTTP server. It focuses mainly on memory and CPU usage, and it's perfect for use when a web service isn't the main purpose of a server. You can, for instance, use it on if you need to provide a brief explanation for the end user on the server purpose on a browser.
 
 ## Why do I need this?
 
